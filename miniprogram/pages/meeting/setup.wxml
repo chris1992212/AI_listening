@@ -1,0 +1,14 @@
+<view class="container">
+  <view class="title">开始一场会议</view>
+  <view class="form">
+    <view class="label">会议主题</view>
+    <input class="input" placeholder="例如：产品需求评审" value="{{topic}}" bindinput="onTopicInput" />
+    <view class="label">会议目标类型</view>
+    <picker mode="selector" range="{{goalTypes}}" value="{{goalTypes.indexOf(goalType)}}" bindchange="onGoalTypeChange">
+      <view class="picker">{{goalType}}</view>
+    </picker>
+    <view class="label">目标描述（可选）</view>
+    <input class="input" placeholder="例如：让领导看到我这周的成果" value="{{goalDesc}}" bindinput="onGoalDescInput" />
+  </view>
+  <button class="btn" bindtap="startMeeting">开始会议</button>
+</view>

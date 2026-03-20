@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "pages/meeting/setup",
+    "pages/meeting/live"
+  ],
+  "window": {
+    "navigationBarTitleText": "会议助手",
+    "navigationBarBackgroundColor": "#f8f8f8"
+  }
+}

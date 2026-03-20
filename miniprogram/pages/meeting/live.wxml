@@ -1,0 +1,30 @@
+<view class="container">
+  <view class="topic">{{topic || '会议进行中'}}</view>
+  <view class="lamp-wrap">
+    <view class="lamp {{lamp}}"></view>
+    <text class="lamp-label">{{lamp === 'green' ? '建议现在发言' : (lamp === 'yellow' ? '可准备发言' : '继续聆听')}}</text>
+  </view>
+  <view class="advice" wx:if="{{sampleUtterance}}">
+    <text class="advice-label">建议这样说：</text>
+    <text class="advice-text">{{sampleUtterance}}</text>
+  </view>
+  <view class="reason" wx:if="{{reason}}">{{reason}}</view>
+  <view class="meta" wx:if="{{summary}}">
+    <view class="meta-title">大模型总结（简版）</view>
+    <view class="meta-text">{{summary}}</view>
+  </view>
+  <view class="meta" wx:if="{{shouldSpeak}}">
+    <view class="meta-title">提醒：建议你现在发观点</view>
+    <view class="meta-text">优先级：{{llmPriority}}</view>
+  </view>
+  <view class="error" wx:if="{{lastError}}">错误：{{lastError}}</view>
+  <view class="asr" wx:if="{{asrLines && asrLines.length}}">
+    <view class="asr-title">ASR转写（调试）</view>
+    <view class="asr-line" wx:for="{{asrLines}}" wx:key="*this">{{item}}</view>
+  </view>
+  <scroll-view class="recent" scroll-y>
+    <view class="recent-title">近期讨论</view>
+    <view class="line" wx:for="{{recentLines}}" wx:key="*this">{{item}}</view>
+  </scroll-view>
+  <button class="btn-end" bindtap="endMeeting">结束会议</button>
+</view>

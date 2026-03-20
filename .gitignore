@@ -1,0 +1,32 @@
+# 密钥与本地配置（切勿提交）
+.env
+backend/.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志与临时
+*.log
+tmp/
+temp/
+*.aac
+*.wav
