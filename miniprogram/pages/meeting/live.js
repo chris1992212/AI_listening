@@ -1,5 +1,6 @@
 // 会议进行页：录音分片上传、轮询建议、信号灯、震动
 const app = getApp();
+const { normalizeWxData } = require('../../utils/request.js');
 
 const CHUNK_INTERVAL_MS = 8000;   // 每 8 秒上传一段
 const POLL_INTERVAL_MS = 5000;   // 每 5 秒拉取状态
@@ -20,6 +21,7 @@ Page({
     lastError: '',
     asrLines: [],
     finalReport: null,
+    emptyHint: '', // 轮询成功但长期无转写/建议时的提示
   },
 
   pushAsrLine(text) {
@@ -109,10 +111,14 @@ Page({
       filePath: tempFilePath,
       name: 'audio',
       formData: { meeting_id: meetingId },
+      // 云侧 ASR+LLM 可能较慢，避免默认 60s 超时导致一直 pending
+      timeout: 120000,
       success: (res) => {
         if (res.statusCode && res.statusCode >= 400) {
           console.error('uploadFile bad status', res.statusCode, res.data);
-          this.setError('上传失败 ' + res.statusCode);
+          const d = normalizeWxData(res.data);
+          const detail = d && d.detail ? String(d.detail) : '';
+          this.setError(detail ? `上传 ${res.statusCode}: ${detail.slice(0, 30)}` : '上传失败 ' + res.statusCode);
           return;
         }
         // 后端返回：{"ok":true,"text":"..."}
@@ -122,7 +128,6 @@ Page({
           const text = obj && obj.text ? obj.text : '';
           if (text) this.pushAsrLine(text);
         } catch (e) {
-          // 返回非 JSON 时也展示一部分，便于排查
           const raw = (res.data || '').toString();
           if (raw) this.pushAsrLine('[chunk-res] ' + raw.slice(0, 120));
         }
@@ -143,18 +148,38 @@ Page({
         data: { meeting_id: meetingId },
         timeout: 8000,
         success: (res) => {
-          if (res.statusCode !== 200 || !res.data) {
+          if (res.statusCode === 404) {
+            const d = normalizeWxData(res.data);
+            const detail = d && d.detail ? String(d.detail) : 'meeting not found';
+            console.error('status 404', detail);
+            this.setError('会议已失效(404)，请返回重新开局');
+            return;
+          }
+          if (res.statusCode !== 200 || res.data == null) {
             console.error('status non-200', res.statusCode, res.data);
             this.setError('status错误 ' + res.statusCode);
             return;
           }
-          const d = res.data;
+          const d = normalizeWxData(res.data);
+          if (!d || d._parseError) {
+            this.setError('status 返回非 JSON');
+            return;
+          }
           const shouldSpeak = !!d.should_speak;
           const last = this.data.lastShouldSpeak;
           if (shouldSpeak && !last) wx.vibrateShort({ type: 'medium' });
           let lamp = 'gray';
           if (d.priority === 'high' && shouldSpeak) lamp = 'green';
           else if (d.priority === 'medium' || shouldSpeak) lamp = 'yellow';
+          const recentLines = d.recent_lines || [];
+          const hasContent =
+            (d.summary && String(d.summary).trim()) ||
+            (d.sample_utterance && String(d.sample_utterance).trim()) ||
+            (recentLines && recentLines.length);
+          const emptyHint =
+            hasContent
+              ? ''
+              : '已连上服务器；若仍无转写，请对着麦克风说话，并检查云端 ASR/防火墙。';
           this.setData({
             topic: d.topic || this.data.topic,
             lamp,
@@ -163,9 +188,10 @@ Page({
             summary: d.summary || '',
             shouldSpeak: shouldSpeak,
             llmPriority: d.priority || 'low',
-            recentLines: d.recent_lines || [],
+            recentLines,
             lastShouldSpeak: shouldSpeak,
             lastError: '',
+            emptyHint,
           });
         },
         fail: (err) => {
@@ -195,8 +221,19 @@ Page({
           url: app.globalData.baseUrl + '/api/meeting/end?meeting_id=' + this.data.meetingId,
           method: 'POST',
           success: (r) => {
-            const report = (r.data && r.data.final_report) ? r.data.final_report : null;
-            const summary = (r.data && r.data.final_summary) ? r.data.final_summary : '';
+            if (r.statusCode !== 200) {
+              const payload = normalizeWxData(r.data) || {};
+              const detail = payload.detail ? String(payload.detail) : '';
+              wx.showModal({
+                title: '结束失败',
+                content: detail || `HTTP ${r.statusCode}`,
+                showCancel: false,
+              });
+              return;
+            }
+            const payload = normalizeWxData(r.data) || {};
+            const report = payload.final_report || null;
+            const summary = payload.final_summary || '';
 
             let content = '暂无复盘报告';
             if (report) {

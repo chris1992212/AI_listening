@@ -18,6 +18,7 @@
     <view class="meta-text">优先级：{{llmPriority}}</view>
   </view>
   <view class="error" wx:if="{{lastError}}">错误：{{lastError}}</view>
+  <view class="hint" wx:if="{{emptyHint && !lastError}}">{{emptyHint}}</view>
   <view class="asr" wx:if="{{asrLines && asrLines.length}}">
     <view class="asr-title">ASR转写（调试）</view>
     <view class="asr-line" wx:for="{{asrLines}}" wx:key="*this">{{item}}</view>

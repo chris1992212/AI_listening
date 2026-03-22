@@ -158,6 +158,8 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
 
     results: list[str] = []
     last_error: dict | None = None
+    # 仅 slice_type=2 入库时，短句/流结束快时可能只有 0/1 中间态；句末或流结束时再兜底写入
+    last_partial_text: str = ""
 
     async def send_audio(ws):
         for i in range(0, len(audio_bytes), chunk_size):
@@ -168,7 +170,7 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
         await ws.send(json.dumps({"type": "end"}))
 
     async def recv_loop(ws):
-        nonlocal results, last_error
+        nonlocal results, last_error, last_partial_text
         try:
             async for msg in ws:
                 if isinstance(msg, str):
@@ -181,14 +183,24 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
                         except Exception:
                             pass
                         return
-                    if data.get("final") == 1:
-                        return
+                    # 同一条消息里可能同时带 result 与 final=1，必须先解析 result 再 return
                     res = data.get("result")
                     if res and isinstance(res, dict):
                         text = (res.get("voice_text_str") or "").strip()
-                        if text and res.get("slice_type") == 2:
+                        st = res.get("slice_type")
+                        if text and st == 2:
                             print(f"[ASR] final slice_type=2 text={text}")
                             results.append(text)
+                            last_partial_text = ""
+                        elif text and st in (0, 1):
+                            last_partial_text = text
+                    if data.get("final") == 1:
+                        if last_partial_text:
+                            if not results or results[-1] != last_partial_text:
+                                print(f"[ASR] flush partial on final text={last_partial_text}")
+                                results.append(last_partial_text)
+                            last_partial_text = ""
+                        return
         except Exception:
             pass
 
@@ -208,15 +220,32 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
                 return ""
             recv_task = asyncio.create_task(recv_loop(ws))
             await send_audio(ws)
-            await asyncio.wait_for(recv_task, timeout=duration_sec + 15)
+            try:
+                await asyncio.wait_for(recv_task, timeout=duration_sec + 15)
+            except asyncio.TimeoutError:
+                # 超时后取消 recv，避免遗留任务；Python 3.11+ 中 CancelledError 不继承 Exception，会漏捕导致 500
+                print("[ASR] recv_task timeout, cancelling recv_loop")
+                recv_task.cancel()
+                try:
+                    await recv_task
+                except asyncio.CancelledError:
+                    pass
+    except asyncio.CancelledError:
+        # 客户端断开上传等，向上传递，勿转成 500
+        raise
     except Exception as e:
         print(f"[ASR] connect/stream error: {e}")
         return ""
 
-    # 识别失败时返回空字符串，由上层决定是否重试/降级
-    if not results and last_error:
+    # 流正常结束但未收到 final=1 时，仍可能留有最后一次中间态
+    out = "".join(results)
+    if not out.strip() and last_partial_text:
+        print(f"[ASR] flush partial after recv end text={last_partial_text}")
+        out = last_partial_text
+
+    if not out and last_error:
         print(f"[ASR] no results, last_error={last_error}")
-    return "".join(results) if results else ""
+    return out
 
 
 def transcribe_sync(audio_bytes: bytes) -> str:

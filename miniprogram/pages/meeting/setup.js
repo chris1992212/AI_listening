@@ -1,5 +1,6 @@
 // 会议设置页：填写主题与目标，点击开始后创建会议并跳转 live
 const app = getApp();
+const { normalizeWxData } = require('../../utils/request.js');
 
 Page({
   data: {
@@ -44,17 +45,22 @@ Page({
         });
       });
       wx.hideLoading();
-      if (res.statusCode !== 200 || !res.data || !res.data.meeting_id) {
-        wx.showToast({ title: res.data?.detail || '创建失败', icon: 'none' });
+      const data = normalizeWxData(res.data);
+      if (res.statusCode !== 200 || !data || !data.meeting_id) {
+        const detail = (data && data.detail) ? String(data.detail) : `HTTP ${res.statusCode}`;
+        console.error('[start] fail', res.statusCode, res.data);
+        wx.showToast({ title: detail.slice(0, 40) || '创建失败', icon: 'none' });
         return;
       }
-      app.globalData.meetingId = res.data.meeting_id;
+      app.globalData.meetingId = data.meeting_id;
       wx.navigateTo({
-        url: '/pages/meeting/live?meeting_id=' + res.data.meeting_id,
+        url: '/pages/meeting/live?meeting_id=' + data.meeting_id,
       });
     } catch (e) {
       wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
+      const msg = (e && e.errMsg) ? e.errMsg : '网络错误';
+      console.error('[start] catch', e);
+      wx.showToast({ title: msg.slice(0, 40), icon: 'none' });
     }
   },
 });
