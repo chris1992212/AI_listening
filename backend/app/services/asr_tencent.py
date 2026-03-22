@@ -129,6 +129,7 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
     if detected_voice_format != 1:
         try:
             audio_bytes = await asyncio.to_thread(_convert_to_pcm_s16le_16k_mono, audio_bytes)
+            print(f"[ASR] after ffmpeg pcm_len={len(audio_bytes)} (was m4a/aac pipeline)")
         except Exception as e:
             print(f"[ASR] ffmpeg convert error: {e}")
             return ""
@@ -160,6 +161,7 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
     last_error: dict | None = None
     # 仅 slice_type=2 入库时，短句/流结束快时可能只有 0/1 中间态；句末或流结束时再兜底写入
     last_partial_text: str = ""
+    recv_text_msg_count = 0
 
     async def send_audio(ws):
         for i in range(0, len(audio_bytes), chunk_size):
@@ -170,39 +172,52 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
         await ws.send(json.dumps({"type": "end"}))
 
     async def recv_loop(ws):
-        nonlocal results, last_error, last_partial_text
+        nonlocal results, last_error, last_partial_text, recv_text_msg_count
         try:
             async for msg in ws:
-                if isinstance(msg, str):
+                # 部分环境下 JSON 帧为 bytes，原先只处理 str 会导致整段识别为空
+                if isinstance(msg, bytes):
+                    try:
+                        msg = msg.decode("utf-8")
+                    except Exception:
+                        print(f"[ASR] skip non-utf8 binary frame len={len(msg)}")
+                        continue
+                if not isinstance(msg, str):
+                    continue
+                recv_text_msg_count += 1
+                try:
                     data = json.loads(msg)
-                    if data.get("code") != 0:
-                        last_error = data
-                        print(f"[ASR] recv nonzero code={data.get('code')} message={data.get('message')}")
-                        try:
-                            await ws.close()
-                        except Exception:
-                            pass
-                        return
-                    # 同一条消息里可能同时带 result 与 final=1，必须先解析 result 再 return
-                    res = data.get("result")
-                    if res and isinstance(res, dict):
-                        text = (res.get("voice_text_str") or "").strip()
-                        st = res.get("slice_type")
-                        if text and st == 2:
-                            print(f"[ASR] final slice_type=2 text={text}")
-                            results.append(text)
-                            last_partial_text = ""
-                        elif text and st in (0, 1):
-                            last_partial_text = text
-                    if data.get("final") == 1:
-                        if last_partial_text:
-                            if not results or results[-1] != last_partial_text:
-                                print(f"[ASR] flush partial on final text={last_partial_text}")
-                                results.append(last_partial_text)
-                            last_partial_text = ""
-                        return
-        except Exception:
-            pass
+                except json.JSONDecodeError as e:
+                    print(f"[ASR] json decode err: {e} head={msg[:200]!r}")
+                    continue
+                if data.get("code") != 0:
+                    last_error = data
+                    print(f"[ASR] recv nonzero code={data.get('code')} message={data.get('message')}")
+                    try:
+                        await ws.close()
+                    except Exception:
+                        pass
+                    return
+                # 同一条消息里可能同时带 result 与 final=1，必须先解析 result 再 return
+                res = data.get("result")
+                if res and isinstance(res, dict):
+                    text = (res.get("voice_text_str") or "").strip()
+                    st = res.get("slice_type")
+                    if text and st == 2:
+                        print(f"[ASR] final slice_type=2 text={text}")
+                        results.append(text)
+                        last_partial_text = ""
+                    elif text and st in (0, 1):
+                        last_partial_text = text
+                if data.get("final") == 1:
+                    if last_partial_text:
+                        if not results or results[-1] != last_partial_text:
+                            print(f"[ASR] flush partial on final text={last_partial_text}")
+                            results.append(last_partial_text)
+                        last_partial_text = ""
+                    return
+        except Exception as e:
+            print(f"[ASR] recv_loop error: {e!r}")
 
     try:
         async with websockets.connect(
@@ -245,6 +260,11 @@ async def transcribe(audio_bytes: bytes, voice_format_override: Optional[int] = 
 
     if not out and last_error:
         print(f"[ASR] no results, last_error={last_error}")
+    if not out.strip():
+        print(
+            f"[ASR] empty transcript summary: recv_text_msgs={recv_text_msg_count} "
+            f"last_partial={last_partial_text!r} pcm_bytes={len(audio_bytes)}"
+        )
     return out
 
 
