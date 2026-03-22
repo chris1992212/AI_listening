@@ -69,6 +69,9 @@ async def meeting_upload_chunk(
         f"audio_len={len(body)} head={body[:16].hex()}"
     )
     text = await asr_transcribe(body, voice_format_override=voice_format_override)
+    # 云端排查：界面无输出时先看 text_len 是否为 0（ASR 空则前端也不会有转写）
+    preview = (text or "")[:120].replace("\n", " ")
+    print(f"[chunk] meeting_id={meeting_id} text_len={len(text or '')} text_preview={preview!r}")
     if text:
         append_transcript(meeting_id, text)
 
@@ -90,7 +93,7 @@ async def meeting_upload_chunk(
         # 兜底：如果 LLM 暂时不可用，这里至少给一个“会议在聊什么”的简版。
         update_summary(meeting_id, summary)
 
-    # 3) 调用大模型给建议
+    # 3) 调用大模型给建议（无转写且无摘要时不会调用 LLM，界面会长期只有灰灯）
     if (recent or summary).strip():
         advice = get_meeting_advice(
             meeting_summary=meeting.summary or summary,
@@ -103,6 +106,8 @@ async def meeting_upload_chunk(
         if advice.get("summary"):
             update_summary(meeting_id, advice["summary"])
         update_advice(meeting_id, advice)
+    else:
+        print(f"[chunk] skip LLM: no recent/summary yet (recent_len={len(recent)} summary_len={len(summary)})")
 
     return {"ok": True, "text": text or ""}
 
