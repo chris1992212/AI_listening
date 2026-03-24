@@ -122,14 +122,15 @@ async def meeting_upload_chunk(
     if text:
         append_transcript(meeting_id, text)
 
-    # 2) 更新简版会议摘要（不依赖 LLM，确保助手模式也能快速看到“聊了什么”）
-    settings = get_settings()
-    now_ts = time.time()
-    summary_sec = settings.MEETING_SUMMARY_INTERVAL_SEC
-    summary_parts = [t for ts, t in meeting.transcript if now_ts - summary_sec <= ts <= now_ts]
-    summary = truncate_to_sentences("".join(summary_parts), 1500)
-    if summary:
-        update_summary(meeting_id, summary)
+    # 2) 普通模式更新简版会议摘要；助手模式仅保留 ASR 转写，不产出中途总结
+    if not meeting.assistant_only:
+        settings = get_settings()
+        now_ts = time.time()
+        summary_sec = settings.MEETING_SUMMARY_INTERVAL_SEC
+        summary_parts = [t for ts, t in meeting.transcript if now_ts - summary_sec <= ts <= now_ts]
+        summary = truncate_to_sentences("".join(summary_parts), 1500)
+        if summary:
+            update_summary(meeting_id, summary)
 
     # 3) 普通模式下，实时建议改为后台异步更新，减少 chunk 阻塞；助手模式不做实时建议
     if not meeting.assistant_only:

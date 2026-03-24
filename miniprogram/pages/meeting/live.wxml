@@ -10,7 +10,7 @@
     <text class="advice-text">{{sampleUtterance}}</text>
   </view>
   <view class="reason" wx:if="{{reason && !assistantOnly}}">{{reason}}</view>
-  <view class="meta" wx:if="{{summary}}">
+  <view class="meta" wx:if="{{summary && !assistantOnly}}">
     <view class="meta-title">大模型总结（简版）</view>
     <view class="meta-text">{{summary}}</view>
   </view>
