@@ -1,19 +1,20 @@
 <view class="container">
   <view class="topic">{{topic || '会议进行中'}}</view>
-  <view class="lamp-wrap">
+  <view class="mode-tip" wx:if="{{assistantOnly}}">会议助手模式：仅录音识别与会后总结</view>
+  <view class="lamp-wrap" wx:if="{{!assistantOnly}}">
     <view class="lamp {{lamp}}"></view>
     <text class="lamp-label">{{lamp === 'green' ? '建议现在发言' : (lamp === 'yellow' ? '可准备发言' : '继续聆听')}}</text>
   </view>
-  <view class="advice" wx:if="{{sampleUtterance}}">
+  <view class="advice" wx:if="{{sampleUtterance && !assistantOnly}}">
     <text class="advice-label">建议这样说：</text>
     <text class="advice-text">{{sampleUtterance}}</text>
   </view>
-  <view class="reason" wx:if="{{reason}}">{{reason}}</view>
+  <view class="reason" wx:if="{{reason && !assistantOnly}}">{{reason}}</view>
   <view class="meta" wx:if="{{summary}}">
     <view class="meta-title">大模型总结（简版）</view>
     <view class="meta-text">{{summary}}</view>
   </view>
-  <view class="meta" wx:if="{{shouldSpeak}}">
+  <view class="meta" wx:if="{{shouldSpeak && !assistantOnly}}">
     <view class="meta-title">提醒：建议你现在发观点</view>
     <view class="meta-text">优先级：{{llmPriority}}</view>
   </view>

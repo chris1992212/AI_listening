@@ -1,6 +1,7 @@
 .container { padding: 32rpx; min-height: 100vh; box-sizing: border-box; }
 .topic { font-size: 28rpx; color: #666; margin-bottom: 32rpx; }
 .lamp-wrap { text-align: center; margin: 48rpx 0; }
+.mode-tip { background: #eef6ff; color: #1565c0; padding: 16rpx; border-radius: 10rpx; margin-bottom: 20rpx; font-size: 24rpx; }
 .lamp { width: 160rpx; height: 160rpx; border-radius: 50%; margin: 0 auto 24rpx; }
 .lamp.gray { background: #e0e0e0; }
 .lamp.yellow { background: #ffc107; }

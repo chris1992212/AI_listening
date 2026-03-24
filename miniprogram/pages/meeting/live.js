@@ -2,8 +2,8 @@
 const app = getApp();
 const { normalizeWxData } = require('../../utils/request.js');
 
-const CHUNK_INTERVAL_MS = 8000;   // 每 8 秒上传一段
-const POLL_INTERVAL_MS = 5000;   // 每 5 秒拉取状态
+const CHUNK_INTERVAL_MS = 5000;   // 每 5 秒上传一段（提升实时速度）
+const POLL_INTERVAL_MS = 2500;   // 每 2.5 秒拉取状态（提升实时速度）
 
 Page({
   data: {
@@ -23,6 +23,7 @@ Page({
     finalReport: null,
     emptyHint: '', // 轮询成功但长期无转写/建议时的提示
     isEnding: false, // 点击结束后，阻止尾包继续上传/重启录音
+    assistantOnly: false,
   },
 
   pushAsrLine(text) {
@@ -41,12 +42,13 @@ Page({
 
   onLoad(options) {
     const meetingId = options.meeting_id || app.globalData.meetingId || '';
+    const assistantOnly = (options.assistant_only === '1');
     if (!meetingId) {
       wx.showToast({ title: '缺少会议ID', icon: 'none' });
       setTimeout(() => wx.navigateBack(), 1500);
       return;
     }
-    this.setData({ meetingId });
+    this.setData({ meetingId, assistantOnly });
     wx.setKeepScreenOn({ keepScreenOn: true });
     this.startRecorder();
     this.startPoll();
@@ -191,6 +193,7 @@ Page({
               ? ''
               : '已连上服务器；若仍无转写，请对着麦克风说话，并检查云端 ASR/防火墙。';
           this.setData({
+            assistantOnly: !!d.assistant_only,
             topic: d.topic || this.data.topic,
             lamp,
             sampleUtterance: d.sample_utterance || '',
@@ -245,6 +248,7 @@ Page({
             const payload = normalizeWxData(r.data) || {};
             const report = payload.final_report || null;
             const summary = payload.final_summary || '';
+            const fullTranscript = payload.full_transcript || '';
 
             let content = '暂无复盘报告';
             if (report) {
@@ -265,6 +269,9 @@ Page({
                 `更好的发言建议：\n${betterText || '-（未识别到）'}`;
             } else {
               content = summary ? `总体总结：${summary}` : '暂无复盘报告';
+            }
+            if (fullTranscript) {
+              content += `\n\n全程转写（节选）：\n${String(fullTranscript).slice(0, 500)}`;
             }
 
             wx.showModal({

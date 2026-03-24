@@ -10,5 +10,6 @@
     <view class="label">目标描述（可选）</view>
     <input class="input" placeholder="例如：让领导看到我这周的成果" value="{{goalDesc}}" bindinput="onGoalDescInput" />
   </view>
-  <button class="btn" bindtap="startMeeting">开始会议</button>
+  <button class="btn" bindtap="startMeeting">开始会议（实时提示）</button>
+  <button class="btn btn-assistant" bindtap="startAssistantMeeting">会议助手（仅录音识别）</button>
 </view>

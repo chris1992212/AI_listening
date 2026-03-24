@@ -21,12 +21,20 @@ Page({
   },
 
   async startMeeting() {
+    return this.startMeetingByMode(false);
+  },
+
+  async startAssistantMeeting() {
+    return this.startMeetingByMode(true);
+  },
+
+  async startMeetingByMode(assistantOnly = false) {
     const { topic, goalType, goalDesc } = this.data;
     if (!topic.trim()) {
       wx.showToast({ title: '请填写会议主题', icon: 'none' });
       return;
     }
-    wx.showLoading({ title: '创建中...' });
+    wx.showLoading({ title: assistantOnly ? '启动助手中...' : '创建中...' });
     try {
       const baseUrl = app.globalData.baseUrl;
       const startUrl = baseUrl + '/api/meeting/start';
@@ -41,6 +49,7 @@ Page({
             goal_type: goalType,
             goal_desc: (goalDesc || topic).trim(),
             role: '参会人',
+            assistant_only: !!assistantOnly,
           },
           success: resolve,
           fail: (err) => {
@@ -59,7 +68,7 @@ Page({
       }
       app.globalData.meetingId = data.meeting_id;
       wx.navigateTo({
-        url: '/pages/meeting/live?meeting_id=' + data.meeting_id,
+        url: '/pages/meeting/live?meeting_id=' + data.meeting_id + '&assistant_only=' + (assistantOnly ? '1' : '0'),
       });
     } catch (e) {
       wx.hideLoading();
