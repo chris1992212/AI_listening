@@ -29,9 +29,11 @@ Page({
     wx.showLoading({ title: '创建中...' });
     try {
       const baseUrl = app.globalData.baseUrl;
+      const startUrl = baseUrl + '/api/meeting/start';
+      console.log('[start] baseUrl=', baseUrl, 'startUrl=', startUrl);
       const res = await new Promise((resolve, reject) => {
         wx.request({
-          url: baseUrl + '/api/meeting/start',
+          url: startUrl,
           method: 'POST',
           header: { 'content-type': 'application/json' },
           data: {
@@ -41,7 +43,10 @@ Page({
             role: '参会人',
           },
           success: resolve,
-          fail: reject,
+          fail: (err) => {
+            console.error('[start] wx.request fail', err, 'url=', startUrl);
+            reject(err);
+          },
         });
       });
       wx.hideLoading();

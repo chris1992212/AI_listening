@@ -22,6 +22,7 @@ Page({
     asrLines: [],
     finalReport: null,
     emptyHint: '', // 轮询成功但长期无转写/建议时的提示
+    isEnding: false, // 点击结束后，阻止尾包继续上传/重启录音
   },
 
   pushAsrLine(text) {
@@ -86,6 +87,7 @@ Page({
     };
 
     rec.onStop((res) => {
+      if (this.data.isEnding) return;
       const path = res.tempFilePath;
       if (path) this.uploadChunk(path);
       this.chunkTimer = setTimeout(start, 500);
@@ -104,10 +106,13 @@ Page({
   },
 
   uploadChunk(tempFilePath) {
+    if (this.data.isEnding) return;
     const meetingId = this.data.meetingId;
     const baseUrl = app.globalData.baseUrl;
+    const chunkUrl = baseUrl + '/api/meeting/chunk';
+    console.log('[chunk] baseUrl=', baseUrl, 'chunkUrl=', chunkUrl);
     wx.uploadFile({
-      url: baseUrl + '/api/meeting/chunk',
+      url: chunkUrl,
       filePath: tempFilePath,
       name: 'audio',
       formData: { meeting_id: meetingId },
@@ -118,6 +123,10 @@ Page({
           console.error('uploadFile bad status', res.statusCode, res.data);
           const d = normalizeWxData(res.data);
           const detail = d && d.detail ? String(d.detail) : '';
+          if (res.statusCode === 400 && detail.includes('meeting already ended')) {
+            // 结束会议后的尾包可忽略，避免误报
+            return;
+          }
           this.setError(detail ? `上传 ${res.statusCode}: ${detail.slice(0, 30)}` : '上传失败 ' + res.statusCode);
           return;
         }
@@ -133,7 +142,7 @@ Page({
         }
       },
       fail: (err) => {
-        console.error('uploadFile fail', err);
+        console.error('uploadFile fail', err, 'url=', chunkUrl);
         this.setError(err?.errMsg || '上传失败');
       },
     });
@@ -143,8 +152,9 @@ Page({
     const poll = () => {
       const meetingId = this.data.meetingId;
       if (!meetingId) return;
+      const statusUrl = app.globalData.baseUrl + '/api/meeting/status';
       wx.request({
-        url: app.globalData.baseUrl + '/api/meeting/status',
+        url: statusUrl,
         data: { meeting_id: meetingId },
         timeout: 8000,
         success: (res) => {
@@ -195,7 +205,7 @@ Page({
           });
         },
         fail: (err) => {
-          console.error('status request fail', err);
+          console.error('status request fail', err, 'url=', statusUrl);
           this.setError(err?.errMsg || '请求失败');
         },
       });
@@ -215,6 +225,7 @@ Page({
       content: '确定结束并查看总结？',
       success: (res) => {
         if (!res.confirm) return;
+        this.setData({ isEnding: true });
         this.stopRecorder();
         this.stopPoll();
         wx.request({

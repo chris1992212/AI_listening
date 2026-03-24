@@ -1,7 +1,8 @@
 // 会议助手小程序
 App({
   globalData: {
-    baseUrl: 'http://8.162.10.206:8000', // 本地调试改为你的电脑 IP，真机需 HTTPS 或内网穿透
+    //baseUrl: 'http://8.162.10.206:8000', // 本地调试改为你的电脑 IP，真机需 HTTPS 或内网穿透
+    baseUrl: 'https://llm-listen.vip.cpolar.cn',
     meetingId: null,
   },
   onLaunch() {
